@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Visor de realidad aumentada</title>
+<meta name="theme-color" content="#14161b">
+
+<!-- Visor 3D con realidad aumentada (Google) -->
+<script type="module" src="https://cdn.jsdelivr.net/npm/@google/model-viewer@4.4.0/dist/model-viewer.min.js"></script>
+
+<!-- three.js: solo para leer STL / OBJ / GLB y convertirlos a GLB -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+  }
+}
+</script>
+
+<style>
+  :root {
+    --fondo: #14161b;
+    --panel: #1d2028;
+    --borde: #2c303b;
+    --texto: #eef0f4;
+    --suave: #9aa1b1;
+    --acento: #ff6b35;
+    --acento-2: #ffb347;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%;
+    background: var(--fondo); color: var(--texto);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body { display: flex; flex-direction: column; }
+
+  /* ---------- Barra superior ---------- */
+  header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 16px; padding-top: max(12px, env(safe-area-inset-top));
+    border-bottom: 1px solid var(--borde);
+    background: var(--fondo);
+  }
+  .logo {
+    width: 34px; height: 34px; border-radius: 10px; flex: none;
+    background: linear-gradient(135deg, var(--acento), var(--acento-2));
+    display: grid; place-items: center; font-weight: 800; color: #1b0f08;
+  }
+  header h1 { font-size: 16px; margin: 0; font-weight: 700; line-height: 1.2; }
+  header small { color: var(--suave); font-size: 12px; }
+  .pestanas { margin-left: auto; display: flex; gap: 4px; background: var(--panel); padding: 4px; border-radius: 12px; }
+  .pestanas button {
+    border: 0; background: transparent; color: var(--suave);
+    padding: 8px 12px; border-radius: 9px; font: inherit; font-size: 13px; font-weight: 600;
+  }
+  .pestanas button.activa { background: var(--acento); color: #1b0f08; }
+  .pestanas button:disabled { opacity: .45; }
+
+  /* ---------- Zona del visor ---------- */
+  main { position: relative; flex: 1; min-height: 0; }
+  model-viewer {
+    width: 100%; height: 100%;
+    background: radial-gradient(circle at 50% 40%, #252a35 0%, var(--fondo) 75%);
+    --poster-color: transparent;
+  }
+
+  /* Pantalla inicial (sin modelo) */
+  #inicio {
+    position: absolute; inset: 0; display: grid; place-items: center; padding: 20px;
+  }
+  .tarjeta {
+    width: min(440px, 100%);
+    background: var(--panel); border: 1px solid var(--borde); border-radius: 20px;
+    padding: 22px;
+  }
+  .soltar {
+    border: 2px dashed var(--borde); border-radius: 16px;
+    padding: 26px 16px; text-align: center; cursor: pointer;
+    transition: border-color .2s, background .2s;
+  }
+  .soltar.encima { border-color: var(--acento); background: rgba(255,107,53,.07); }
+  .soltar .icono { font-size: 34px; }
+  .soltar b { display: block; margin: 8px 0 4px; font-size: 16px; }
+  .soltar span { color: var(--suave); font-size: 13px; }
+  .separador { display: flex; align-items: center; gap: 10px; color: var(--suave); font-size: 12px; margin: 18px 0 14px; }
+  .separador::before, .separador::after { content: ""; flex: 1; height: 1px; background: var(--borde); }
+  .caja-prueba label { display: block; font-size: 13px; color: var(--suave); margin-bottom: 8px; }
+  .fila { display: flex; gap: 8px; align-items: center; }
+  .fila input {
+    width: 100%; min-width: 0; padding: 10px; border-radius: 10px;
+    border: 1px solid var(--borde); background: var(--fondo); color: var(--texto);
+    font: inherit; font-size: 15px; text-align: center;
+  }
+  .fila .x { color: var(--suave); }
+
+  /* Botones */
+  .btn {
+    border: 1px solid var(--borde); background: var(--panel); color: var(--texto);
+    padding: 10px 14px; border-radius: 12px; font: inherit; font-size: 14px; font-weight: 600;
+    cursor: pointer; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+  }
+  .btn.principal { background: var(--acento); border-color: var(--acento); color: #1b0f08; }
+  .btn.ancho { width: 100%; justify-content: center; margin-top: 10px; }
+  .btn.activo { border-color: var(--acento); color: var(--acento); }
+
+  /* Botón de realidad aumentada (dentro del visor) */
+  #botonRA {
+    position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%);
+    padding: 14px 22px; border-radius: 999px; font-size: 15px;
+    box-shadow: 0 8px 24px rgba(255,107,53,.35);
+  }
+
+  /* Etiquetas de medidas */
+  .medida {
+    background: rgba(20,22,27,.88); color: var(--texto);
+    border: 1.5px solid var(--acento); border-radius: 8px;
+    padding: 3px 8px; font-size: 12px; font-weight: 700;
+    pointer-events: none; white-space: nowrap;
+    transform: translate(-50%, -50%);
+  }
+  model-viewer.sin-medidas .medida { display: none; }
+
+  /* ---------- Panel inferior ---------- */
+  #panel {
+    display: none;
+    border-top: 1px solid var(--borde); background: var(--panel);
+    padding: 12px 16px; padding-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+  #panel.visible { display: block; }
+  .info { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 10px; }
+  .info .nombre { font-weight: 700; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .info .dims { color: var(--acento-2); font-weight: 700; font-size: 14px; white-space: nowrap; }
+  .controles { display: flex; gap: 8px; flex-wrap: wrap; }
+  @media (max-width: 440px) { header small { display: none; } header h1 { font-size: 15px; } .pestanas button { padding: 8px 10px; } }
+  .controles select {
+    border: 1px solid var(--borde); background: var(--fondo); color: var(--texto);
+    padding: 10px; border-radius: 12px; font: inherit; font-size: 14px;
+  }
+  .nota { color: var(--suave); font-size: 12px; margin: 10px 0 0; line-height: 1.4; }
+
+  /* ---------- Cargando / errores ---------- */
+  #cargando {
+    position: absolute; inset: 0; display: none; place-items: center;
+    background: rgba(20,22,27,.8); z-index: 10; text-align: center; padding: 20px;
+  }
+  #cargando.visible { display: grid; }
+  .giro {
+    width: 42px; height: 42px; margin: 0 auto 14px; border-radius: 50%;
+    border: 4px solid var(--borde); border-top-color: var(--acento);
+    animation: girar 0.9s linear infinite;
+  }
+  @keyframes girar { to { transform: rotate(360deg); } }
+  #aviso {
+    position: absolute; left: 12px; right: 12px; top: 12px; z-index: 11;
+    background: #3a1d1d; border: 1px solid #7a3434; color: #ffd6d6;
+    padding: 12px 14px; border-radius: 12px; font-size: 14px; display: none;
+  }
+  #aviso.visible { display: block; }
+  input[type=file] { display: none; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">RA</div>
+  <div>
+    <h1>Visor de realidad aumentada</h1>
+    <small>Tus modelos a tamaño real</small>
+  </div>
+  <nav class="pestanas">
+    <button class="activa">Ver tamaño</button>
+    <button disabled title="Siguiente fase">Ensamblar</button>
+  </nav>
+</header>
+
+<main>
+  <model-viewer id="visor"
+    camera-controls touch-action="pan-y"
+    shadow-intensity="1" shadow-softness="0.8" exposure="1"
+    ar ar-modes="webxr scene-viewer quick-look"
+    ar-scale="fixed" ar-placement="floor"
+    interaction-prompt="none">
+    <button slot="ar-button" id="botonRA" class="btn principal">📱 Ver en mi espacio</button>
+  </model-viewer>
+
+  <!-- Pantalla inicial -->
+  <div id="inicio">
+    <div class="tarjeta">
+      <div class="soltar" id="zonaSoltar">
+        <div class="icono">📦</div>
+        <b>Abrir modelo</b>
+        <span>STEP, STL, OBJ o GLB · toca aquí o arrastra el archivo</span>
+      </div>
+
+      <div class="separador">o prueba con una caja</div>
+
+      <div class="caja-prueba">
+        <label>Ancho × Profundidad × Alto (mm)</label>
+        <div class="fila">
+          <input id="cajaA" type="number" inputmode="numeric" value="530">
+          <span class="x">×</span>
+          <input id="cajaP" type="number" inputmode="numeric" value="530">
+          <span class="x">×</span>
+          <input id="cajaH" type="number" inputmode="numeric" value="400">
+        </div>
+        <button class="btn ancho" id="botonCaja">Crear caja de prueba</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="cargando"><div><div class="giro"></div><div id="textoCargando">Cargando…</div></div></div>
+  <div id="aviso"></div>
+</main>
+
+<!-- Panel inferior (aparece con un modelo cargado) -->
+<section id="panel">
+  <div class="info">
+    <span class="nombre" id="nombreModelo">—</span>
+    <span class="dims" id="dimsModelo">—</span>
+  </div>
+  <div class="controles">
+    <select id="unidad" title="Unidad del archivo">
+      <option value="mm">mm</option>
+      <option value="cm">cm</option>
+      <option value="m">m</option>
+      <option value="in">pulgadas</option>
+    </select>
+    <button class="btn" id="botonEje" title="Si el modelo sale echado, cambia el eje vertical">↻ Eje Z arriba</button>
+    <button class="btn activo" id="botonMedidas">📏 Medidas</button>
+    <button class="btn" id="botonOtro">📂 Otro archivo</button>
+  </div>
+  <p class="nota" id="notaRA"></p>
+</section>
+
+<input type="file" id="archivo" accept=".step,.stp,.stl,.obj,.glb,.gltf">
+
+<script type="module">
+import * as THREE from 'three';
+import { STLLoader } from 'three/addons/loaders/STLLoader.js';
+import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+
+// ------------------------------------------------------------------
+// Referencias a la página
+// ------------------------------------------------------------------
+const $ = (id) => document.getElementById(id);
+const visor = $('visor');
+const entradaArchivo = $('archivo');
+
+// Cuántos metros mide 1 unidad del archivo (el visor trabaja en metros)
+const METROS_POR_UNIDAD = { mm: 0.001, cm: 0.01, m: 1, in: 0.0254 };
+
+// Estado del modelo cargado
+const estado = {
+  nombre: '',
+  original: null,      // objeto three.js tal como vino del archivo
+  unidad: 'mm',
+  zArriba: false,      // true = el archivo usa Z como eje vertical
+  medidas: true,
+  urlActual: null,
+};
+
+// ------------------------------------------------------------------
+// Mensajes en pantalla
+// ------------------------------------------------------------------
+function mostrarCargando(texto) {
+  $('textoCargando').textContent = texto;
+  $('cargando').classList.add('visible');
+}
+function ocultarCargando() { $('cargando').classList.remove('visible'); }
+
+function mostrarAviso(texto) {
+  const a = $('aviso');
+  a.textContent = texto;
+  a.classList.add('visible');
+  setTimeout(() => a.classList.remove('visible'), 6000);
+}
+
+// ------------------------------------------------------------------
+// Material por defecto (para STL / OBJ que no traen color)
+// ------------------------------------------------------------------
+function materialGris() {
+  return new THREE.MeshStandardMaterial({ color: 0xb8bec9, metalness: 0.15, roughness: 0.55 });
+}
+
+// ------------------------------------------------------------------
+// Lectores de cada formato → devuelven un objeto three.js
+// ------------------------------------------------------------------
+function leerSTL(buffer) {
+  const geometria = new STLLoader().parse(buffer);
+  if (!geometria.attributes.normal) geometria.computeVertexNormals();
+  // Algunos STL traen color por cara
+  const material = geometria.hasColors
+    ? new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55 })
+    : materialGris();
+  return new THREE.Mesh(geometria, material);
+}
+
+function leerOBJ(texto) {
+  const grupo = new OBJLoader().parse(texto);
+  grupo.traverse((o) => {
+    if (o.isMesh) {
+      if (!o.geometry.attributes.normal) o.geometry.computeVertexNormals();
+      o.material = materialGris();
+    }
+  });
+  return grupo;
+}
+
+function leerGLB(buffer) {
+  return new Promise((ok, falla) => {
+    new GLTFLoader().parse(buffer, '', (gltf) => ok(gltf.scene), falla);
+  });
+}
+
+// Lector de STEP: se descarga solo la primera vez que se usa (~8 MB)
+let occt = null;
+async function cargarLectorSTEP() {
+  if (occt) return occt;
+  const base = 'https://cdn.jsdelivr.net/npm/occt-import-js@0.0.23/dist/';
+  await new Promise((ok, falla) => {
+    const s = document.createElement('script');
+    s.src = base + 'occt-import-js.js';
+    s.onload = ok;
+    s.onerror = () => falla(new Error('No se pudo descargar el lector de STEP (¿sin internet?)'));
+    document.head.appendChild(s);
+  });
+  occt = await window.occtimportjs({ locateFile: (f) => base + f });
+  return occt;
+}
+
+function colorRGB(c) { return new THREE.Color(c[0], c[1], c[2]); }
+
+async function leerSTEP(buffer) {
+  const lector = await cargarLectorSTEP();
+  mostrarCargando('Convirtiendo STEP…');
+  // Pequeña pausa para que se pinte el mensaje antes del cálculo pesado
+  await new Promise((r) => setTimeout(r, 50));
+
+  const r = lector.ReadStepFile(new Uint8Array(buffer), { linearUnit: 'millimeter' });
+  if (!r.success) throw new Error('El archivo STEP no se pudo leer');
+
+  const grupo = new THREE.Group();
+  for (const m of r.meshes) {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(m.attributes.position.array, 3));
+    if (m.attributes.normal) g.setAttribute('normal', new THREE.Float32BufferAttribute(m.attributes.normal.array, 3));
+    else g.computeVertexNormals();
+    g.setIndex(m.index.array);
+
+    // Color: por cara si existe, si no el color de la pieza, si no gris
+    const colorPieza = m.color ? colorRGB(m.color) : null;
+    const hayColorPorCara = (m.brep_faces || []).some((f) => f.color);
+    let material;
+
+    if (hayColorPorCara) {
+      const materiales = [];
+      const indicePorColor = {};
+      for (const f of m.brep_faces) {
+        const c = f.color ? colorRGB(f.color) : (colorPieza || new THREE.Color(0xb8bec9));
+        const clave = c.getHexString();
+        if (indicePorColor[clave] === undefined) {
+          indicePorColor[clave] = materiales.length;
+          materiales.push(new THREE.MeshStandardMaterial({ color: c, metalness: 0.15, roughness: 0.55 }));
+        }
+        g.addGroup(f.first * 3, (f.last - f.first + 1) * 3, indicePorColor[clave]);
+      }
+      material = materiales;
+    } else {
+      material = materialGris();
+      if (colorPieza) material.color = colorPieza;
+    }
+
+    const malla = new THREE.Mesh(g, material);
+    malla.name = m.name || 'pieza';
+    grupo.add(malla);
+  }
+  return grupo;
+}
+
+// ------------------------------------------------------------------
+// Abrir un archivo elegido por el usuario
+// ------------------------------------------------------------------
+async function abrirArchivo(archivo) {
+  const ext = archivo.name.split('.').pop().toLowerCase();
+  mostrarCargando(ext === 'step' || ext === 'stp'
+    ? 'Descargando lector de STEP (solo la primera vez)…'
+    : 'Leyendo archivo…');
+
+  try {
+    let objeto;
+    let unidad = 'mm';
+
+    if (ext === 'stl') {
+      objeto = leerSTL(await archivo.arrayBuffer());
+    } else if (ext === 'obj') {
+      objeto = leerOBJ(await archivo.text());
+    } else if (ext === 'glb' || ext === 'gltf') {
+      objeto = await leerGLB(await archivo.arrayBuffer());
+      unidad = 'm'; // GLB siempre está en metros
+    } else if (ext === 'step' || ext === 'stp') {
+      objeto = await leerSTEP(await archivo.arrayBuffer());
+    } else {
+      throw new Error('Formato no soportado: .' + ext);
+    }
+
+    estado.nombre = archivo.name;
+    estado.original = objeto;
+    estado.unidad = unidad;
+    estado.zArriba = false;
+    await actualizarVisor();
+  } catch (e) {
+    console.error(e);
+    mostrarAviso('⚠️ ' + e.message);
+  } finally {
+    ocultarCargando();
+  }
+}
+
+// ------------------------------------------------------------------
+// Caja de prueba (para ver cuánto espacio ocupa algo sin tener el modelo)
+// ------------------------------------------------------------------
+function crearCaja() {
+  const a = parseFloat($('cajaA').value) || 100;
+  const p = parseFloat($('cajaP').value) || 100;
+  const h = parseFloat($('cajaH').value) || 100;
+  const geometria = new THREE.BoxGeometry(a, h, p); // en mm, Y = alto
+  const material = new THREE.MeshStandardMaterial({
+    color: 0xff6b35, transparent: true, opacity: 0.45, roughness: 0.6,
+  });
+  const caja = new THREE.Mesh(geometria, material);
+  // Aristas visibles
+  const aristas = new THREE.LineSegments(
+    new THREE.EdgesGeometry(geometria),
+    new THREE.LineBasicMaterial({ color: 0xffb347 })
+  );
+  caja.add(aristas);
+
+  estado.nombre = `Caja ${a} × ${p} × ${h} mm`;
+  estado.original = caja;
+  estado.unidad = 'mm';
+  estado.zArriba = false;
+  actualizarVisor();
+}
+
+// ------------------------------------------------------------------
+// Líneas de cota: tres barras delgadas (ancho, profundidad, alto)
+// ------------------------------------------------------------------
+function crearCotas(tam) {
+  const grupo = new THREE.Group();
+  const grosor = Math.max(tam.x, tam.y, tam.z) * 0.006;
+  const material = new THREE.MeshBasicMaterial({ color: 0xff6b35 });
+  const sep = grosor * 4; // separación respecto al modelo
+
+  const barra = (largo, eje, x, y, z) => {
+    const dims = { x: [largo, grosor, grosor], y: [grosor, largo, grosor], z: [grosor, grosor, largo] }[eje];
+    const b = new THREE.Mesh(new THREE.BoxGeometry(...dims), material);
+    b.position.set(x, y, z);
+    grupo.add(b);
+  };
+  const hx = tam.x / 2, hz = tam.z / 2;
+  barra(tam.x, 'x', 0, grosor / 2, hz + sep);          // ancho: borde frontal
+  barra(tam.z, 'z', hx + sep, grosor / 2, 0);          // profundidad: borde derecho
+  barra(tam.y, 'y', hx + sep, tam.y / 2, hz + sep);    // alto: esquina frontal derecha
+  return { grupo, sep };
+}
+
+function ponerEtiquetas(tam, sep) {
+  visor.querySelectorAll('.medida').forEach((e) => e.remove());
+  const mm = (m) => `${Math.round(m * 1000)} mm`;
+  const hx = tam.x / 2, hz = tam.z / 2;
+  const etiquetas = [
+    { nombre: 'ancho', texto: mm(tam.x), pos: [0, 0, hz + sep * 3] },
+    { nombre: 'prof', texto: mm(tam.z), pos: [hx + sep * 3, 0, 0] },
+    { nombre: 'alto', texto: mm(tam.y), pos: [hx + sep * 3, tam.y / 2, hz + sep * 3] },
+  ];
+  for (const e of etiquetas) {
+    const el = document.createElement('div');
+    el.className = 'medida';
+    el.slot = 'hotspot-' + e.nombre;
+    el.dataset.position = e.pos.map((v) => v.toFixed(4)).join(' ');
+    el.textContent = e.texto;
+    visor.appendChild(el);
+  }
+}
+
+// ------------------------------------------------------------------
+// Prepara el modelo (unidad, eje, centrado) y se lo pasa al visor como GLB
+// ------------------------------------------------------------------
+async function actualizarVisor() {
+  if (!estado.original) return;
+
+  // Envoltura: aquí se aplican escala y giro sin tocar el original
+  const envoltura = new THREE.Group();
+  envoltura.add(estado.original.clone());
+  envoltura.scale.setScalar(METROS_POR_UNIDAD[estado.unidad]);
+  if (estado.zArriba) envoltura.rotation.x = -Math.PI / 2;
+
+  const escena = new THREE.Scene();
+  escena.add(envoltura);
+  escena.updateMatrixWorld(true);
+
+  // Centrar en X y Z, y apoyar la base en el piso (Y = 0)
+  const caja = new THREE.Box3().setFromObject(envoltura);
+  const centro = caja.getCenter(new THREE.Vector3());
+  envoltura.position.set(-centro.x, -caja.min.y, -centro.z);
+  escena.updateMatrixWorld(true);
+
+  const tam = new THREE.Box3().setFromObject(envoltura).getSize(new THREE.Vector3());
+
+  // Cotas
+  const { grupo: cotas, sep } = crearCotas(tam);
+  if (estado.medidas) escena.add(cotas);
+
+  // Exportar a GLB en memoria y cargarlo en el visor
+  const glb = await new GLTFExporter().parseAsync(escena, { binary: true });
+  if (estado.urlActual) URL.revokeObjectURL(estado.urlActual);
+  estado.urlActual = URL.createObjectURL(new Blob([glb], { type: 'model/gltf-binary' }));
+  visor.src = estado.urlActual;
+
+  ponerEtiquetas(tam, sep);
+  visor.classList.toggle('sin-medidas', !estado.medidas);
+
+  // Panel
+  $('inicio').style.display = 'none';
+  $('panel').classList.add('visible');
+  $('nombreModelo').textContent = estado.nombre;
+  $('dimsModelo').textContent =
+    `${Math.round(tam.x * 1000)} × ${Math.round(tam.z * 1000)} × ${Math.round(tam.y * 1000)} mm`;
+  $('unidad').value = estado.unidad;
+  $('botonEje').classList.toggle('activo', estado.zArriba);
+  $('botonMedidas').classList.toggle('activo', estado.medidas);
+
+  // Aviso si el tamaño parece absurdo (unidad mal elegida)
+  const mayor = Math.max(tam.x, tam.y, tam.z);
+  if (mayor > 20) mostrarAviso(`El modelo mide más de 20 m. ¿La unidad del archivo es correcta?`);
+  if (mayor < 0.002) mostrarAviso(`El modelo mide menos de 2 mm. ¿La unidad del archivo es correcta?`);
+}
+
+// ------------------------------------------------------------------
+// ¿Se puede usar la realidad aumentada aquí?
+// ------------------------------------------------------------------
+visor.addEventListener('load', () => {
+  const nota = $('notaRA');
+  if (visor.canActivateAR) {
+    nota.textContent = 'Apunta al piso o a la mesa, mueve el celular despacio y toca para colocar. El tamaño queda fijo (escala real).';
+  } else if (!window.isSecureContext) {
+    nota.textContent = 'Vista 3D lista. Para la realidad aumentada, abre la página desde su enlace https en el celular (no como archivo local).';
+  } else {
+    nota.textContent = 'Vista 3D lista. La realidad aumentada se activa desde un celular compatible (Chrome en Android).';
+  }
+});
+
+visor.addEventListener('ar-status', (e) => {
+  if (e.detail.status === 'failed') {
+    mostrarAviso('No se pudo iniciar la realidad aumentada. Revisa que estén instalados los Servicios de Google Play para RA y que la página esté en https.');
+  }
+});
+
+visor.addEventListener('error', () => mostrarAviso('El visor no pudo mostrar el modelo.'));
+
+// ------------------------------------------------------------------
+// Botones y arrastrar archivo
+// ------------------------------------------------------------------
+const zona = $('zonaSoltar');
+zona.addEventListener('click', () => entradaArchivo.click());
+$('botonOtro').addEventListener('click', () => entradaArchivo.click());
+entradaArchivo.addEventListener('change', () => {
+  if (entradaArchivo.files[0]) abrirArchivo(entradaArchivo.files[0]);
+  entradaArchivo.value = '';
+});
+
+['dragenter', 'dragover'].forEach((ev) => document.addEventListener(ev, (e) => {
+  e.preventDefault(); zona.classList.add('encima');
+}));
+['dragleave', 'drop'].forEach((ev) => document.addEventListener(ev, (e) => {
+  e.preventDefault(); zona.classList.remove('encima');
+}));
+document.addEventListener('drop', (e) => {
+  const f = e.dataTransfer.files[0];
+  if (f) abrirArchivo(f);
+});
+
+$('botonCaja').addEventListener('click', crearCaja);
+
+$('unidad').addEventListener('change', (e) => {
+  estado.unidad = e.target.value;
+  actualizarVisor();
+});
+$('botonEje').addEventListener('click', () => {
+  estado.zArriba = !estado.zArriba;
+  actualizarVisor();
+});
+$('botonMedidas').addEventListener('click', () => {
+  estado.medidas = !estado.medidas;
+  actualizarVisor();
+});
+</script>
+</body>
+</html>
