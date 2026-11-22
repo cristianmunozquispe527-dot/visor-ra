@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prueba de estabilidad</title>
+<style>
+  body { margin: 0; padding: 20px; background: #14161b; color: #eef0f4;
+         font-family: system-ui, sans-serif; }
+  h1 { font-size: 18px; }
+  p { color: #9aa1b1; font-size: 14px; line-height: 1.45; }
+  .grupo { background: #1d2028; border: 1px solid #2c303b; border-radius: 16px;
+           padding: 16px; margin: 14px 0; }
+  .grupo b { display: block; margin-bottom: 10px; }
+  a { display: block; text-align: center; text-decoration: none; font-weight: 700;
+      padding: 13px; border-radius: 12px; margin-top: 8px; }
+  .nativo { background: #ff6b35; color: #1b0f08; }
+  .web { background: transparent; color: #eef0f4; border: 1px solid #2c303b; }
+</style>
+</head>
+<body>
+<h1>Prueba: ¿qué visor es más estable?</h1>
+<p>Abre cada modelo con los dos botones y compáralos. Usa buena luz y una superficie con textura (no una mesa blanca lisa).</p>
+
+<div class="grupo">
+  <b>📄 Hoja A4 (210 × 297 mm)</b>
+  <p>Ponla junto a una hoja A4 real: así ves si el tamaño es correcto.</p>
+  <a class="nativo" id="a4-nativo">Visor de Google (nativo)</a>
+  <a class="web" href="../?prueba=hoja-a4">Mi visor (navegador)</a>
+</div>
+
+<div class="grupo">
+  <b>📦 Caja de la CNC (530 × 530 × 400 mm)</b>
+  <a class="nativo" id="cnc-nativo">Visor de Google (nativo)</a>
+  <a class="web" href="../?prueba=caja-cnc">Mi visor (navegador)</a>
+</div>
+
+<script>
+  // Enlace al visor nativo de Google (Scene Viewer), con tamaño bloqueado a escala real
+  function enlaceNativo(nombre) {
+    const glb = new URL(nombre + '.glb', location.href).href;
+    const params = 'file=' + encodeURIComponent(glb) + '&mode=ar_only&resizable=false';
+    return 'intent://arvr.google.com/scene-viewer/1.0?' + params +
+      '#Intent;scheme=https;package=com.google.android.googlequicksearchbox;' +
+      'action=android.intent.action.VIEW;' +
+      'S.browser_fallback_url=' + encodeURIComponent(location.href) + ';end;';
+  }
+  document.getElementById('a4-nativo').href = enlaceNativo('hoja-a4');
+  document.getElementById('cnc-nativo').href = enlaceNativo('caja-cnc');
+</script>
+</body>
+</html>

@@ -600,6 +600,14 @@ $('botonMedidas').addEventListener('click', () => {
   estado.medidas = !estado.medidas;
   actualizarVisor();
 });
+
+// Modelos de prueba: ?prueba=hoja-a4 abre prueba/hoja-a4.glb
+const prueba = new URLSearchParams(location.search).get('prueba');
+if (prueba) {
+  fetch('prueba/' + prueba + '.glb')
+    .then((r) => r.blob())
+    .then((b) => abrirArchivo(new File([b], prueba + '.glb')));
+}
 </script>
 </body>
 </html>
